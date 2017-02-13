@@ -1,0 +1,51 @@
+- name: install zookeeper-server
+  tags: package
+  yum: name=zookeeper-server state=latest
+
+- name: create configuration directory
+  tags: config
+  file: path={{ etc_folder }}/zookeeper state=directory
+
+- name: setup alternatives link
+  tags: config
+  alternatives: name=zookeeper-conf link=/etc/zookeeper/conf path={{ etc_folder }}/zookeeper
+
+- name: install template configurations
+  tags: config
+  template: src=zoo.cfg.j2 dest={{ etc_folder }}/zookeeper/zoo.cfg
+
+- name: install files configurations
+  tags: config
+  copy: src={{ item }} dest=/etc/zookeeper/conf/{{ item }}
+  with_items:
+    - configuration.xsl
+    - log4j.properties
+
+- name: install default configurations
+  tags: config
+  template: src=default/{{ item }}.j2 dest=/etc/default/{{ item }}
+  with_items:
+    - zookeeper
+
+- name: ensure data dir
+  tags: config
+  file: path={{ zookeeper_data_dir }} state=directory owner=zookeeper group=zookeeper
+
+- name: clean zookeeper data directory
+  tags: init
+  shell: rm -rf {{ zookeeper_data_dir }}/*
+  when: destroy_data
+
+- name: init zookeeper directory
+  tags: init
+  command: service zookeeper-server init
+  when: destroy_data
+
+- name: install myid
+  tags: init
+  template: src=myid.j2 dest={{ zookeeper_data_dir }}/myid
+  when: groups['zookeepernodes']|count > 1 and destroy_data
+
+- name: start zookeeper
+  tags: service
+  service: name=zookeeper-server state=restarted enabled=yes

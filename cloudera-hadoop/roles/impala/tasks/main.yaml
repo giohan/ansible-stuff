@@ -1,0 +1,5 @@
+- include: impala.yaml
+  when: deploy == "impala"
+
+- include: impala-server.yaml
+  when: deploy == "impala-server" and groups['impala-store-catalog']|count == 1

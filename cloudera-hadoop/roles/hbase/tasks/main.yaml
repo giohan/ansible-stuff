@@ -1,0 +1,5 @@
+- include: hbase-master.yaml
+  when: deploy == "hbase-master"
+
+- include: regionserver.yaml
+  when: deploy == "regionserver" and groups['hbasemaster']|count == 1

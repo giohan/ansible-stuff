@@ -1,0 +1,58 @@
+- name: install impala server package
+  tags: packages
+  yum:  name={{ item }} state=latest
+  with_items:
+    - impala-server
+    - impala-shell
+
+- name: fix impala-shell
+  tags: patch
+  lineinfile: dest=/usr/bin/impala-shell regexp="^PYTHON_EGG_CACHE=" line="export PYTHON_EGG_CACHE=/tmp/impala-shell-python-egg-cache-`whoami`"
+
+- name: create configuration directory
+  tags: config
+  file: path={{ etc_folder }}/impala state=directory
+
+- name: setup alternatives link
+  tags: config
+  alternatives: name=impala-conf link=/etc/impala/conf path={{ etc_folder }}/impala
+
+- name: install template configurations
+  tags: config
+  template: src={{ item }}.j2 dest={{ etc_folder }}/impala/{{ item }}
+  with_items:
+    - hive-site.xml
+    - core-site.xml
+    - hdfs-site.xml
+
+- name: install default configurations
+  tags: config
+  template: src={{ item }}.j2 dest=/etc/default/{{ item }}
+  with_items:
+    - impala
+
+- name: create log folders
+  tags: config
+  file: path={{ log_folder }}/impala state=directory owner=impala mode=0755
+
+- name: start services
+  tags: service
+  service: name={{ item }} state=restarted enabled=yes
+  with_items:
+    - impala-server
+
+- name: wait
+  command: sleep 30
+
+- name: test impala
+  tags: test
+  command: impala-shell -u hdfs -d default -q 'create external table ansible_test_table ( id int ) location "/tmp/ansible_test_table"; drop table ansible_test_table;'
+  when: ansible_hostname == groups['datanodes'][0]
+
+- name: create hdfs dir
+  tags: config
+  command: sudo -u hdfs hdfs dfs {{ item }}
+  with_items:
+    - -mkdir -p /user/impala
+    - '-chown impala:hadoop /user/impala'
+    - -chmod 1777 /user/impala

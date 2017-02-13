@@ -1,0 +1,47 @@
+- name: install resource manager package
+  tags: package
+  yum:  name={{ item }} state=latest
+  with_items:
+    - hadoop-yarn-resourcemanager
+
+- name: install history server package
+  tags: package
+  yum:  name={{ item }} state=latest
+  with_items:
+    - hadoop-mapreduce-historyserver
+  when: ansible_hostname == groups['yarnresourcemanager'][0]
+
+- name: install default configurations
+  tags: config
+  copy: src=default/{{ item }} dest=/etc/default/{{ item }}
+  with_items:
+    - hadoop-yarn-resourcemanager
+    - hadoop-mapreduce-historyserver
+
+- name: configure hdfs directories
+  tags: config
+  command: sudo -Hu hdfs hdfs dfs {{ item }}
+  with_items:
+    - -mkdir -p /tmp
+    - -chmod 1777 /tmp
+    - -mkdir -p /user/history
+    - -chmod 1777 /user/history
+    - -chown mapred:hadoop /user/history
+    - -mkdir -p /var/log/hadoop-yarn/apps
+    - -chown yarn:mapred /var/log/hadoop-yarn
+    - -chown yarn:hadoop /var/log/hadoop-yarn/apps
+    - -chmod 1777 /var/log/hadoop-yarn/apps
+  run_once: true
+
+- name: start services
+  tags: service
+  service: name={{ item }} state=restarted enabled=yes
+  with_items:
+    - hadoop-yarn-resourcemanager
+
+- name: start services
+  tags: service
+  service: name={{ item }} state=restarted enabled=yes
+  with_items:
+    - hadoop-mapreduce-historyserver
+  when: ansible_hostname == groups['yarnresourcemanager'][0]

@@ -1,0 +1,5 @@
+- include: hive-server.yaml
+  when: deploy == "hive-server"
+
+- include: hive-client.yaml
+  when: deploy == "hive-client" and groups['hivemetastore']|count == 1

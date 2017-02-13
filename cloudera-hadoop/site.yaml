@@ -1,0 +1,172 @@
+---
+- name: Check hosts file
+  tags: check
+  hosts: all
+  roles:
+    - check_config
+
+- name: Setup local environment
+  tags:
+    - common
+    - clinit
+    - interfaces
+    - config
+  hosts: all
+  tasks:
+    - name: create working directory
+      local_action: file dest="{{ inventory_dir }}/workdir" state=directory
+      run_once: true
+
+- name: Prepare hosts for cloudera hadoop cluster
+  tags: common
+  hosts: java
+  roles:
+    - common
+
+- name: Deploy zookeeper
+  hosts: zookeepernodes
+  tags: zookeepernodes
+  roles:
+    - zookeeper
+
+- name: Deploy hadoop configuration
+  tags:
+    - config
+    - hadoop
+  hosts: hadoop
+  roles:
+    - { role: hadoop, deploy: 'base' }
+
+- name: Deploy journal nodes
+  tags: journalnodes
+  hosts: journalnodes
+  roles:
+    - { role: hadoop, deploy: 'journalnodes' }
+
+- name: Deploy namenodes
+  tags: namenodes
+  hosts: namenodes
+  roles:
+    - { role: hadoop, deploy: 'namenodes' }
+    - { role: hadoop, deploy: 'namenodes-fence' }
+
+- name: Deploy datanodes
+  tags: datanodes
+  hosts: datanodes
+  roles:
+    - { role: hadoop, deploy: 'datanodes' }
+
+- name: Test hdfs
+  tags: test
+  hosts: namenodes
+  roles:
+    - { role: hadoop, deploy: 'test-hdfs' }
+
+- name: Deploy yarn resource manager and job history server
+  tags: yarnresourcemanager
+  hosts: yarnresourcemanager
+  roles:
+    - { role: hadoop, deploy: 'resourcemanager' }
+
+- name: Test mapreduce
+  tags: test
+  hosts: yarnresourcemanager
+  roles:
+    - { role: hadoop, deploy: 'test-mapreduce' }
+
+- name: Deploy postgresql
+  tags: postgresql
+  hosts: postgresql
+  roles:
+    - postgresql
+
+- name: Deploy hive metastore
+  tags: hivemetastore
+  hosts: hivemetastore
+  roles:
+    - { role: hivemetastore, deploy: 'hive-server' }
+
+- name: Deploy hive client on datanodes
+  tags: hive
+  hosts: datanodes
+  roles:
+    - { role: hivemetastore, deploy: 'hive-client' }
+
+- name: Deploy impala state-store and catalog
+  tags: impala
+  hosts: impala-store-catalog
+  roles:
+    - { role: impala, deploy: 'impala' }
+
+- name: Deploy impala daemon on datanodes
+  tags: impala
+  hosts: datanodes
+  roles:
+    - { role: impala, deploy: 'impala-server' }
+
+- name: Deploy HBase
+  tags: hbase
+  hosts: hbasemaster
+  roles:
+    - { role: hbase, deploy: 'hbase-master' }
+
+- name: Deploy HBase regionservers on datanodes
+  tags: hbase
+  hosts: datanodes
+  roles:
+    - { role: hbase, deploy: 'regionserver' }
+
+- name: Deploy spark
+  tags: spark
+  hosts: spark
+  roles:
+    - spark
+
+- name: Deploy solr search
+  tags: solr
+  hosts: solr
+  roles:
+    - solr
+
+- name: Deploy oozie
+  tags: oozie
+  hosts: oozie
+  roles:
+    - oozie
+
+- name: Deploy kafka
+  tags: kafka
+  hosts: kafka
+  roles:
+    - kafka
+
+- name: Deploy Hue
+  tags: hue
+  hosts: hue
+  roles:
+    - hue
+
+- name: Deploy snmp monitoring
+  tags: snmp
+  hosts: java
+  roles:
+    - { role: snmp, when: enable_snmp }
+
+- name: Deploy syslog-ng monitoring
+  tags: syslog
+  hosts: java
+  roles:
+    - { role: syslog-ng, when: enable_syslog }
+
+- name: cluster
+  tags: cluster
+  hosts: yarnresourcemanager
+  tasks:
+    - debug: msg="{{ lookup('pipe', 'echo; clinit -S workdir/services.xml --nocolors tree;echo =')}}"
+      run_once: true
+
+- name: dashboard
+  tags: dashboard
+  hosts: dashboard
+  roles:
+    - dashboard

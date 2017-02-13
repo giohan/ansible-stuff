@@ -1,0 +1,98 @@
+- name: install packages
+  tags: packages
+  yum:  name={{ item }} state=latest
+  with_items:
+  - hue
+  - hadoop-httpfs
+  - postgresql
+  - python-psycopg2
+
+- name: create configuration directory
+  tags: config
+  file: path=/etc/hue/conf.{{cluster_name}} state=directory
+
+- name: setup alternatives link
+  tags: config
+  alternatives: name=hue-conf link=/etc/hue/conf path=/etc/hue/conf.{{cluster_name}}
+
+- name: install template configurations
+  tags: config
+  template: src=hue.ini.j2 dest=/etc/hue/conf/hue.ini
+
+- name: check certificate file exists
+  local_action: stat path={{ inventory_dir }}/workdir/hue.pem
+  register: hue_cert
+  run_once: true
+
+- name: generate certificate
+  tags: init
+  local_action: shell {{ item }} chdir={{ inventory_dir }}/workdir/
+  with_items:
+    - openssl req -nodes -newkey rsa:2048 -keyout hue.key -out hue.csr -subj "/O=Hadoop/OU=hue/CN=hue/emailAddress=adm@it.xx"
+    - openssl x509 -req -days 3650 -in hue.csr -signkey hue.key -out hue.crt
+    - cat hue.crt hue.key > hue.pem
+  when: hue_cert.stat.isreg is not defined
+  run_once: true
+
+- name: install certificate
+  tags: config
+  copy: src={{ inventory_dir }}/workdir/hue.pem dest=/etc/hue/conf/hue.pem
+
+- name: install files configurations
+  tags: config
+  copy: src={{ item }} dest=/etc/hue/conf/{{ item }}
+  with_items:
+    - log4j.properties
+    - log.conf
+
+- name: install default configurations
+  tags: config
+  copy: src=default/{{ item }} dest=/etc/default/{{ item }}
+  with_items:
+    - hadoop-httpfs
+
+- name: create warehouse dir and home for admin user
+  command: sudo -Hu hdfs hdfs dfs {{ item }}
+  with_items:
+    - -mkdir -p /user/admin
+    - -chown admin /user/admin
+  run_once: true
+
+- name: generate sql
+  template: src="hue.sql.j2" dest=/tmp/hue.sql
+
+- name: install .pgpass
+  template: src=".pgpass.j2" dest=/root/.pgpass mode=0600
+
+- name: create database
+  command: psql -h {{ groups['postgresql'][0] }} --username postgres -f /tmp/hue.sql
+  when: destroy_data
+  run_once: true
+
+- name: remove sql and .pgpass files
+  command: rm -f /tmp/hue.sql /root/.pgpass
+
+- name: initialize database
+  command: "{{ item }} chdir=/tmp"
+  with_items:
+    - mkdir -p logs
+    - /usr/lib/hue/build/env/bin/hue syncdb --noinput
+    - /usr/lib/hue/build/env/bin/hue migrate
+    - rm -rf logs
+  when: destroy_data
+  run_once: true
+
+- name: fix /etc/init.d/hue for systemd
+  tags: patch
+  lineinfile: 'dest=/etc/init.d/hue regexp="^# pidfile:" line="# pidfile: /var/run/hue/supervisor.pid"'
+
+- name: reload systemd
+  command: systemctl daemon-reload
+  when: ansible_os_family == "RedHat" and {{ ansible_distribution_major_version }} >= 7
+
+- name: start services
+  tags: service
+  service: name={{ item }} state=restarted enabled=yes
+  with_items:
+    - hue
+    - hadoop-httpfs

@@ -1,0 +1,23 @@
+- include: base.yaml
+  when: deploy == "base"
+
+- include: journalnode.yaml
+  when: deploy == "journalnodes"
+
+- include: namenodes-fence.yaml
+  when: deploy == "namenodes-fence" and groups['namenodes']|count > 1
+
+- include: namenode.yaml
+  when: deploy == "namenodes"
+
+- include: datanode.yaml
+  when: deploy == "datanodes"
+
+- include: test-hdfs.yaml
+  when: deploy == "test-hdfs"
+
+- include: resourcemanager.yaml
+  when: deploy == "resourcemanager"
+
+- include: test-mapreduce.yaml
+  when: deploy == "test-mapreduce"

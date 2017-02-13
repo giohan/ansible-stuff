@@ -1,0 +1,62 @@
+# java package name
+# for oracle distributed packages you should use java-<version> as name
+java_package: java-1.8.0
+java_home: /usr/java/jdk1.8.0_65/
+
+# cluster name will impact the name of alternatives links and hdfs URI in the case of HA
+cluster_name: cluster
+
+# common folders
+log_folder: /var/log
+etc_folder: /etc/cluster
+
+# the ssh key to access other hosts without password 
+# you have to generate it and put public key to the target hosts <effective user>/.ssh/authorized_keys
+#
+#clinit_ssh_key: /root/.ssh/hadoop.key
+
+# clinit effective user
+clinit_effective_user: root
+
+# the variable to control data destruction. non destructive plays not tested yet
+destroy_data: True
+
+# zookeeper data directory
+zookeeper_data_dir: '/var/lib/zookeeper'
+
+# snmp monitoring, change to True to enable
+enable_snmp: False
+
+# syslog monitoring, change to True to enable
+enable_syslog: False
+
+# this is a directory for 5 static files forming a dashboard
+dashboard_folder: /var/www/html/dashboard
+
+# postgresql version
+postgres_version: ""
+
+# postgres database accounts passwords
+#
+# postgres administrative account password
+postgres_password: postgres
+
+# metastore database password
+hiveuser_password: mypassword
+
+# oozie database password
+oozie_password: theoozie
+
+# hue database password
+hue_password: thehue
+
+# a user database name
+# if specified, it will be created in postgres and hue will be configured to use it
+# uncomment the next line if a user database is required to setup
+#user_database: userdb
+
+# a password for user database. username will be userdb_user
+#userdb_password: myfavoritepassword
+
+# a custom sql 
+#postgres_script: |

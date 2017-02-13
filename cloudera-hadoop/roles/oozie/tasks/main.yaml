@@ -1,0 +1,109 @@
+- name: install oozie packages
+  tags: packages
+  yum:  name={{ item }} state=latest
+  with_items:
+    - oozie
+    - unzip
+    - postgresql
+
+- name: create configuration directory
+  tags: config
+  file: path={{ etc_folder }}/oozie state=directory
+
+- name: create log directory
+  tags: config
+  file: path={{ log_folder }}/oozie state=directory owner=oozie group=oozie mode=755
+
+- name: setup alternatives link
+  tags: config
+  alternatives: name=oozie-conf link=/etc/oozie/conf path={{ etc_folder }}/oozie
+
+- name: setup alternatives link
+  tags: config
+  alternatives: name=oozie-tomcat-conf link=/etc/oozie/oozie-tomcat-conf path=/etc/oozie/tomcat-conf.http
+
+- name: install template configurations
+  tags: config
+  template: src="{{ item }}.j2" dest={{ etc_folder }}/oozie/{{ item }}
+  with_items:
+    - oozie-site.xml
+    - oozie-env.sh
+
+- name: install files configurations
+  tags: config
+  copy: src={{ item }} dest={{ etc_folder }}/oozie/{{ item }}
+  with_items:
+    - hadoop-config.xml
+    - oozie-default.xml
+    - oozie-log4j.properties
+
+- name: create config directories
+  tags: config
+  file: path=/etc/oozie/conf/{{ item }} state=directory
+  with_items:
+    - action-conf
+    - hadoop-conf
+
+- name: install files configurations
+  tags: config
+  copy: src={{ item }} dest={{ etc_folder }}/oozie/action-conf/{{ item|basename }}
+  with_fileglob:
+    - action-conf/*
+
+- name: install files configurations
+  tags: config
+  copy: src={{ item }} dest={{ etc_folder }}/oozie/hadoop-conf/{{ item|basename }}
+  with_fileglob:
+    - hadoop-conf/*
+
+- name: create hdfs directories
+  tags: init
+  command: sudo -Hu hdfs hdfs dfs {{ item }}
+  with_items:
+    - -mkdir -p /user/oozie
+    - -chown oozie:oozie /user/oozie
+  run_once: true
+
+- name: install shared libraries to hdfs
+  tags: 
+    - config
+    - oozie-setup 
+  command: oozie-setup sharelib create -fs {% if groups['namenodes']|count > 1 %} hdfs://{{ cluster_name }} {% else %} hdfs://{{ groups['namenodes'][0] }}:8020 {% endif %} -locallib /usr/lib/oozie/oozie-sharelib-yarn
+  run_once: true
+
+- name: generate sql
+  tags: init
+  template: src="oozie.sql.j2" dest=/tmp/oozie.sql
+
+- name: install .pgpass
+  template: src=".pgpass.j2" dest=/root/.pgpass mode=0600
+
+- name: create database
+  tags: init
+  command: psql -h {{ groups['postgresql'][0] }} --username postgres -f /tmp/oozie.sql
+  when: destroy_data
+  run_once: true
+
+- name: remove sql and .pgpass files
+  command: rm -f /tmp/oozie.sql /root/.pgpass
+
+- name: initialize database
+  tags: init
+  command: service oozie init
+  when: destroy_data
+  run_once: true
+
+- name: get ext-2.2.zip if not exists
+  tags: download
+  local_action: get_url url=http://archive.cloudera.com/gplextras/misc/ext-2.2.zip dest={{ inventory_dir }}/workdir/ext-2.2.zip
+  run_once: true
+
+- name: extract ext-2.2
+  tags: config
+  unarchive: src={{ inventory_dir }}/workdir/ext-2.2.zip dest=/var/lib/oozie/
+
+- name: start services
+  tags: service
+  service: name=oozie state=restarted enabled=yes
+
+- include: oozie-test.yaml tags=test
